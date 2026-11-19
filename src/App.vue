@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed, watch } from 'vue';
 
 const taches = ref([
                    
@@ -27,6 +27,50 @@ const taches = ref([
                    }
 ])
 
+const nombreTotalTaches = computed(() => {
+  return taches.value.length;
+});
+
+const nombreTachesTerminees = computed(() => {
+  return taches.value.filter(t => t.terminee).length;
+});
+
+const aDesTaches = computed(() => {
+  return taches.value.length > 0;
+});
+
+const peutUtiliserTriManuel = computed(() => {
+  return triCritere.value === 'manuel';
+});
+
+const tachesTriees = computed(() => {
+  switch (triCritere.value) {
+    case 'manuel':
+      return taches.value.toSorted((a, b) => a.ordre - b.ordre);
+
+    case 'creation':
+      return taches.value.toSorted((a, b) => a.id - b.id);
+
+    case 'libelleAsc':
+      return taches.value.toSorted((a, b) =>
+        a.libelle.localeCompare(b.libelle)
+      );
+
+    case 'libelleDesc':
+      return taches.value.toSorted((a, b) =>
+        b.libelle.localeCompare(a.libelle)
+      );
+
+    case 'terminee':
+      return taches.value.toSorted((a, b) =>
+        Number(a.terminee) - Number(b.terminee) ||
+        a.libelle.localeCompare(b.libelle)
+      );
+
+    default:
+      return taches.value.toSorted((a, b) => a.ordre - b.ordre);
+  }
+});
 
 const nouvelleTache = ref ('');
 const triCritere = ref('manuel');
@@ -47,17 +91,21 @@ if (idSauvegarde !== null) {
   prochainId.value = Number(idSauvegarde);
 }
 
-function sauvegarderTaches() {
+watch(taches, () => {
   localStorage.setItem(
     CLE_LOCALSTORAGE_TACHES,
     JSON.stringify(taches.value)
   );
+}, { deep: true });
 
+watch(prochainId, (nouvelleValeur) => {
   localStorage.setItem(
     CLE_LOCALSTORAGE_PROCHAIN_ID,
-    prochainId.value
+    String(nouvelleValeur)
   );
-}
+});
+
+
 
 
 function ajouterTache() {
@@ -78,9 +126,6 @@ function ajouterTache() {
 
   nouvelleTache.value = '';
 
-  appliquerTri();
-
-  sauvegarderTaches();
 }
 
 function basculerTerminee(id) {
@@ -88,92 +133,64 @@ function basculerTerminee(id) {
 
   if (tache) {
     tache.terminee = !tache.terminee;
-    sauvegarderTaches();
+  
   }
 }
 
 function supprimerTache(id) {
   taches.value = taches.value.filter(t => t.id !== id);
 
-  sauvegarderTaches();
+
 }
 
 function monter(id) {
-  if (triCritere.value !== 'manuel') {
+  if (!peutUtiliserTriManuel.value) {
     return;
   }
 
-  const index = taches.value.findIndex(t => t.id === id);
+  const index = tachesTriees.value.findIndex(t => t.id === id);
 
   if (index <= 0) {
     return;
   }
 
-  const tacheActuelle = taches.value[index];
-  const tachePrecedente = taches.value[index - 1];
+  const tacheActuelle = taches.value.find(t => t.id === id);
+
+  const tachePrecedente = taches.value.find(
+    t => t.id === tachesTriees.value[index - 1].id
+  );
 
   const ancienOrdre = tacheActuelle.ordre;
 
   tacheActuelle.ordre = tachePrecedente.ordre;
   tachePrecedente.ordre = ancienOrdre;
 
-  appliquerTri();
-  sauvegarderTaches();
+
 }
 
 function descendre(id) {
-  if (triCritere.value !== 'manuel') {
+  if (!peutUtiliserTriManuel.value) {
     return;
   }
 
-  const index = taches.value.findIndex(t => t.id === id);
+  const index = tachesTriees.value.findIndex(t => t.id === id);
 
-  if (index === -1 || index >= taches.value.length - 1) {
+  if (index === -1 || index >= tachesTriees.value.length - 1) {
     return;
   }
 
-  const tacheActuelle = taches.value[index];
-  const tacheSuivante = taches.value[index + 1];
+  const tacheActuelle = taches.value.find(t => t.id === id);
+
+  const tacheSuivante = taches.value.find(
+    t => t.id === tachesTriees.value[index + 1].id
+  );
 
   const ancienOrdre = tacheActuelle.ordre;
 
   tacheActuelle.ordre = tacheSuivante.ordre;
   tacheSuivante.ordre = ancienOrdre;
 
-  appliquerTri();
-  sauvegarderTaches();
-}
 
-
-function appliquerTri() {
-  switch (triCritere.value) {
-    case 'manuel':
-      taches.value.sort((a, b) => a.ordre - b.ordre);
-      break;
-
-    case 'creation':
-      taches.value.sort((a, b) => a.id - b.id);
-      break;
-
-    case 'libelleAsc':
-      taches.value.sort((a, b) =>
-        a.libelle.localeCompare(b.libelle)
-      );
-      break;
-
-    case 'libelleDesc':
-      taches.value.sort((a, b) =>
-        b.libelle.localeCompare(a.libelle)
-      );
-      break;
-
-    case 'terminee':
-      taches.value.sort((a, b) =>
-        Number(a.terminee) - Number(b.terminee) ||
-        a.libelle.localeCompare(b.libelle)
-      );
-      break;
-  }
 }
 
 
@@ -206,7 +223,6 @@ function appliquerTri() {
       <select
         id="tri"
         v-model="triCritere"
-        @change="appliquerTri"
       >
         <option value="manuel">Ordre personnalisé</option>
         <option value="creation">Ordre de création</option>
@@ -215,9 +231,6 @@ function appliquerTri() {
         <option value="terminee">Non terminées d'abord</option>
       </select>
 
-      <button type="button" @click="appliquerTri" class="btn-appliquer">
-        Appliquer
-      </button>
     </div>
 
     <p class="info-tri">
@@ -228,20 +241,20 @@ function appliquerTri() {
     <div class="compteurs">
       <div class="compteur compteur-total">
         <span class="compteur-titre">Total</span>
-        <span class="compteur-valeur">{{ taches.length }}</span>
+        <span class="compteur-valeur">{{ nombreTotalTaches }}</span>
       </div>
 
       <div class="compteur compteur-terminees">
         <span class="compteur-titre">Terminées</span>
         <span class="compteur-valeur">
-          {{ taches.filter(t => t.terminee).length }}
+          {{ nombreTachesTerminees }}
         </span>
       </div>
     </div>
 
     <div class="zone-liste">
-      <ul v-if="taches.length > 0" class="liste-taches">
-        <li v-for="tache in taches" :key="tache.id" class="ligne-tache">
+      <ul v-if="aDesTaches" class="liste-taches">
+        <li v-for="tache in tachesTriees" :key="tache.id" class="ligne-tache">
           <span class="libelle-tache" :class="{ terminee: tache.terminee }">
             {{ tache.libelle }}
           </span>
@@ -250,7 +263,7 @@ function appliquerTri() {
             <button
               type="button"
               @click="monter(tache.id)"
-              :disabled="triCritere !== 'manuel'"
+              :disabled="!peutUtiliserTriManuel"
               class="btn-mini btn-monter"
             >
               ⬆
@@ -259,7 +272,7 @@ function appliquerTri() {
             <button
               type="button"
               @click="descendre(tache.id)"
-              :disabled="triCritere !== 'manuel'"
+              :disabled="!peutUtiliserTriManuel"
               class="btn-mini btn-descendre"
             >
               ⬇

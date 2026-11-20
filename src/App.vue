@@ -1,7 +1,10 @@
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref,   } from 'vue';
 import TodoList from './components/TodoList.vue';
 import TodoForm from './components/TodoForm.vue';
+import { useLocalStorage } from './composables/useLocalStorage.js';
+import { useTodolistStats } from './composables/useTodolistStats.js';
+import { useTodolistTri } from './composables/useTodolistTri.js';
 const taches = ref([
                    
                    {id:1,
@@ -28,83 +31,33 @@ const taches = ref([
                    }
 ])
 
-const nombreTotalTaches = computed(() => {
-  return taches.value.length;
-});
+const {
+    nombreTotalTaches,
+    nombreTachesTerminees,
+    aDesTaches
+} = useTodolistStats(taches);
 
-const nombreTachesTerminees = computed(() => {
-  return taches.value.filter(t => t.terminee).length;
-});
-
-const aDesTaches = computed(() => {
-  return taches.value.length > 0;
-});
-
-const peutUtiliserTriManuel = computed(() => {
-  return triCritere.value === 'manuel';
-});
-
-const tachesTriees = computed(() => {
-  switch (triCritere.value) {
-    case 'manuel':
-      return taches.value.toSorted((a, b) => a.ordre - b.ordre);
-
-    case 'creation':
-      return taches.value.toSorted((a, b) => a.id - b.id);
-
-    case 'libelleAsc':
-      return taches.value.toSorted((a, b) =>
-        a.libelle.localeCompare(b.libelle)
-      );
-
-    case 'libelleDesc':
-      return taches.value.toSorted((a, b) =>
-        b.libelle.localeCompare(a.libelle)
-      );
-
-    case 'terminee':
-      return taches.value.toSorted((a, b) =>
-        Number(a.terminee) - Number(b.terminee) ||
-        a.libelle.localeCompare(b.libelle)
-      );
-
-    default:
-      return taches.value.toSorted((a, b) => a.ordre - b.ordre);
-  }
-});
+  
 
 
 const triCritere = ref('manuel');
+
+const {
+    peutUtiliserTriManuel,
+    tachesTriees
+} = useTodolistTri(taches, triCritere);
+
+const afficherFormulaire = ref(true);
 const prochainId = ref(4);
 const CLE_LOCALSTORAGE_TACHES = 'todolist:taches';
 const CLE_LOCALSTORAGE_PROCHAIN_ID = 'todolist:prochainId';
 
 
-const tachesSauvegardees = localStorage.getItem(CLE_LOCALSTORAGE_TACHES);
+useLocalStorage(CLE_LOCALSTORAGE_TACHES, taches);
 
-if (tachesSauvegardees !== null) {
-  taches.value = JSON.parse(tachesSauvegardees);
-}
+useLocalStorage(CLE_LOCALSTORAGE_PROCHAIN_ID, prochainId);
 
-const idSauvegarde = localStorage.getItem(CLE_LOCALSTORAGE_PROCHAIN_ID);
 
-if (idSauvegarde !== null) {
-  prochainId.value = Number(idSauvegarde);
-}
-
-watch(taches, () => {
-  localStorage.setItem(
-    CLE_LOCALSTORAGE_TACHES,
-    JSON.stringify(taches.value)
-  );
-}, { deep: true });
-
-watch(prochainId, (nouvelleValeur) => {
-  localStorage.setItem(
-    CLE_LOCALSTORAGE_PROCHAIN_ID,
-    String(nouvelleValeur)
-  );
-});
 
 
 
@@ -196,10 +149,19 @@ function descendre(id) {
 
 
 <template>
+
   <div id="conteneur">
     <h2>Exo Synthèse</h2>
 
-    <TodoForm @demander-ajout-tache="ajouterTache" />
+
+    <button @click="afficherFormulaire = !afficherFormulaire">
+    {{ afficherFormulaire ? 'Masquer le formulaire' : 'Afficher le formulaire' }}
+</button>
+
+    <TodoForm
+    v-if="afficherFormulaire"
+    @demander-ajout-tache="ajouterTache"
+/>
 
     <div class="bloc-tri">
       <label for="tri">Trier les tâches :</label>

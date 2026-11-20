@@ -1,6 +1,7 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, useTemplateRef, onMounted, onUnmounted } from 'vue';
 const nouvelleTache = ref('');
+const champSaisie = useTemplateRef('champSaisie');
 
 const emit = defineEmits(['demanderAjoutTache']);
 
@@ -18,13 +19,38 @@ function gererSoumission() {
     nouvelleTache.value = '';
 }
 
+function gererRaccourciClavier(event) {
+    if (event.ctrlKey || event.altKey || event.metaKey) {
+        return;
+    }
 
+    if (event.target.matches('input, textarea') ||
+        event.target.isContentEditable) {
+        return;
+    }
+
+    if (event.key.toLowerCase() === 'n') {
+        event.preventDefault();
+        champSaisie.value.focus();
+    }
+
+  }
+
+  onMounted(() => {
+    champSaisie.value.focus();
+    window.addEventListener('keydown', gererRaccourciClavier);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('keydown', gererRaccourciClavier);
+});
 
 </script>
 
 <template>
   <form @submit.prevent="gererSoumission" class="form-ajout">
         <input
+            ref="champSaisie"
             type="text"
             v-model="nouvelleTache"
             placeholder="Entrez une nouvelle tâche"
